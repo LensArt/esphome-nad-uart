@@ -11,13 +11,14 @@ wifi:
   power_save_mode: none
 
 logger:
-  level: INFO
+  level: DEBUG
+  baud_rate: 115200
 
 api:
   reboot_timeout: 0s
 
 ota:
-  - platform: esphome
+  platform: esphome
 
 uart:
   id: uart_bus
@@ -26,19 +27,40 @@ uart:
   baud_rate: 115200
 
   debug:
-    direction: BOTH
+    direction: RX
     after:
-      delimiter: "\n"
+      delimiter: "\r"
     sequence:
-      - lambda: UARTDebug::log_string(direction, bytes);
+      - lambda: |-
+          std::string line(bytes.begin(), bytes.end());
 
-external_components:
-  - source:
-      type: git
-      url: https://github.com/wez/ESPHome-UART-Read-Line-Sensor
-    components:
-      - uart_read_line_sensor
+          size_t eq = line.find('=');
+          if (eq == std::string::npos) return;
 
+          std::string key = line.substr(0, eq);
+          std::string value = line.substr(eq + 1);
+
+          ESP_LOGI("NAD", "key=%s value=%s", key.c_str(), value.c_str());
+
+          if (key == "Main.Power") {
+            id(power_switch).publish_state(value == "On");
+          }
+
+          if (key == "Main.Mute") {
+            id(mute_switch).publish_state(value == "On");
+          }
+
+          if (key == "Main.SpeakerA") {
+            id(speaker_a_switch).publish_state(value == "On");
+          }
+
+          if (key == "Main.SpeakerB") {
+            id(speaker_b_switch).publish_state(value == "On");
+          }
+
+          if (key == "Main.Source") {
+            id(source_select).publish_state(value);
+          }
 
 interval:
   - interval: 300s
@@ -53,57 +75,11 @@ interval:
       - delay: 200ms
       - uart.write: "\rMain.Source?\r"
 
-
-text_sensor:
-
-  - platform: uart_read_line_sensor
-    name: "Last UART Line"
-    id: nad_uart
-
-    uart_id: uart_bus
-
-    on_value:
-      then:
-        - lambda: |-
-
-            std::string line = x;
-
-            line.erase(std::remove(line.begin(), line.end(), '\r'), line.end());
-            line.erase(std::remove(line.begin(), line.end(), '\n'), line.end());
-
-            size_t eq = line.find("=");
-            if (eq == std::string::npos) return;
-
-            std::string key = line.substr(0, eq);
-            std::string value = line.substr(eq + 1);
-
-            std::transform(key.begin(), key.end(), key.begin(), ::tolower);
-
-            ESP_LOGI("NAD", "key=%s value=%s", key.c_str(), value.c_str());
-
-            bool state = (value == "On");
-
-            if (key == "main.power")
-              id(power).publish_state(state);
-
-            else if (key == "main.mute")
-              id(mute).publish_state(state);
-
-            else if (key == "main.speakera")
-              id(speaker_a).publish_state(state);
-
-            else if (key == "main.speakerb")
-              id(speaker_b).publish_state(state);
-
-            else if (key == "main.source")
-              id(source).publish_state(value);
-
-
 switch:
   - platform: template
     name: "Power"
     icon: mdi:power
-    id: power
+    id: power_switch
 
     turn_on_action:
       - uart.write: "\rMain.Power=On\r"
@@ -111,11 +87,10 @@ switch:
     turn_off_action:
       - uart.write: "\rMain.Power=Off\r"
 
-
   - platform: template
     name: "Mute"
     icon: mdi:volume-mute
-    id: mute
+    id: mute_switch
 
     turn_on_action:
       - uart.write: "\rMain.Mute=On\r"
@@ -123,11 +98,10 @@ switch:
     turn_off_action:
       - uart.write: "\rMain.Mute=Off\r"
 
-
   - platform: template
     name: "Speaker A"
     icon: mdi:speaker
-    id: speaker_a
+    id: speaker_a_switch
 
     turn_on_action:
       - uart.write: "\rMain.SpeakerA=On\r"
@@ -135,11 +109,10 @@ switch:
     turn_off_action:
       - uart.write: "\rMain.SpeakerA=Off\r"
 
-
   - platform: template
     name: "Speaker B"
     icon: mdi:speaker
-    id: speaker_b
+    id: speaker_b_switch
 
     turn_on_action:
       - uart.write: "\rMain.SpeakerB=On\r"
@@ -147,28 +120,23 @@ switch:
     turn_off_action:
       - uart.write: "\rMain.SpeakerB=Off\r"
 
-
 button:
   - platform: template
     name: "Volume Up"
     icon: mdi:volume-plus
-
     on_press:
       - uart.write: "\rMain.Volume+\r"
-
 
   - platform: template
     name: "Volume Down"
     icon: mdi:volume-minus
-
     on_press:
       - uart.write: "\rMain.Volume-\r"
-
 
 select:
   - platform: template
     name: "Source"
-    id: source
+    id: source_select
 
     options:
       - CD
