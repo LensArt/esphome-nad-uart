@@ -20,48 +20,62 @@ api:
 ota:
   platform: esphome
 
+external_components:
+  - source:
+      type: git
+      url: https://github.com/wez/ESPHome-UART-Read-Line-Sensor
+    components:
+      - uart_read_line_sensor
+
 uart:
   id: uart_bus
   tx_pin: D8
   rx_pin: D7
   baud_rate: 115200
 
-  debug:
-    direction: RX
-    after:
-      delimiter: "\r"
-    sequence:
-      - lambda: |-
-          std::string line(bytes.begin(), bytes.end());
+# ----- Text Sensor for UART-received lines -----
+text_sensor:
+  - platform: uart_read_line_sensor
+    uart_id: uart_bus
+    name: "NAD UART Line"
+    id: nad_uart_line
+    on_value:
+      then:
+        - lambda: |-
+            std::string line = x;
 
-          size_t eq = line.find('=');
-          if (eq == std::string::npos) return;
+            line.erase(std::remove(line.begin(), line.end(), '\r'), line.end());
+            line.erase(std::remove(line.begin(), line.end(), '\n'), line.end());
 
-          std::string key = line.substr(0, eq);
-          std::string value = line.substr(eq + 1);
+            size_t eq = line.find('=');
+            if (eq == std::string::npos) return;
 
-          ESP_LOGI("NAD", "key=%s value=%s", key.c_str(), value.c_str());
+            std::string key = line.substr(0, eq);
+            std::string value = line.substr(eq + 1);
 
-          if (key == "Main.Power") {
-            id(power_switch).publish_state(value == "On");
-          }
+            std::transform(key.begin(), key.end(), key.begin(), ::tolower);
 
-          if (key == "Main.Mute") {
-            id(mute_switch).publish_state(value == "On");
-          }
+            ESP_LOGI("NAD", "key=%s value=%s", key.c_str(), value.c_str());
 
-          if (key == "Main.SpeakerA") {
-            id(speaker_a_switch).publish_state(value == "On");
-          }
+            bool state = (value == "On");
 
-          if (key == "Main.SpeakerB") {
-            id(speaker_b_switch).publish_state(value == "On");
-          }
+            // Update switches and select in HA
+            if (key == "main.power")
+              id(power).publish_state(state);
 
-          if (key == "Main.Source") {
-            id(source_select).publish_state(value);
-          }
+            else if (key == "main.mute")
+              id(mute).publish_state(state);
 
+            else if (key == "main.speakera")
+              id(speaker_a).publish_state(state);
+
+            else if (key == "main.speakerb")
+              id(speaker_b).publish_state(state);
+
+            else if (key == "main.source")
+              id(source).publish_state(value);
+
+# ----- Interval polling -----
 interval:
   - interval: 300s
     then:
@@ -75,51 +89,45 @@ interval:
       - delay: 200ms
       - uart.write: "\rMain.Source?\r"
 
+# ----- Switches -----
 switch:
   - platform: template
     name: "Power"
     icon: mdi:power
-    id: power_switch
-
+    id: power
     turn_on_action:
       - uart.write: "\rMain.Power=On\r"
-
     turn_off_action:
       - uart.write: "\rMain.Power=Off\r"
 
   - platform: template
     name: "Mute"
     icon: mdi:volume-mute
-    id: mute_switch
-
+    id: mute
     turn_on_action:
       - uart.write: "\rMain.Mute=On\r"
-
     turn_off_action:
       - uart.write: "\rMain.Mute=Off\r"
 
   - platform: template
     name: "Speaker A"
     icon: mdi:speaker
-    id: speaker_a_switch
-
+    id: speaker_a
     turn_on_action:
       - uart.write: "\rMain.SpeakerA=On\r"
-
     turn_off_action:
       - uart.write: "\rMain.SpeakerA=Off\r"
 
   - platform: template
     name: "Speaker B"
     icon: mdi:speaker
-    id: speaker_b_switch
-
+    id: speaker_b
     turn_on_action:
       - uart.write: "\rMain.SpeakerB=On\r"
-
     turn_off_action:
       - uart.write: "\rMain.SpeakerB=Off\r"
 
+# ----- Buttons -----
 button:
   - platform: template
     name: "Volume Up"
@@ -133,11 +141,11 @@ button:
     on_press:
       - uart.write: "\rMain.Volume-\r"
 
+# ----- Source Select -----
 select:
   - platform: template
     name: "Source"
-    id: source_select
-
+    id: source
     options:
       - CD
       - TUNER
@@ -145,7 +153,6 @@ select:
       - MP
       - DISC/MDC
       - TAPE2
-
     set_action:
       - lambda: |-
           std::string cmd = "\rMain.Source=" + x + "\r";
