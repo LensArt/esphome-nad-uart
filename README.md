@@ -1,6 +1,6 @@
 # ESPHome controller for NAD C356BEE
 
-Control NAD C356BEE through RS232 from Home Assistant (HA) using ESPHome and a Wemos D1. The ESPhome configuration exposes the following entities to HA:
+Control NAD C356BEE through RS232 from Home Assistant (HA) using ESPHome and a Wemos D1 mini. The ESPhome configuration exposes the following entities to HA:
 
 - Power
 - Sources
@@ -20,17 +20,17 @@ The UART text sensor used for ESPHome is based on the description at [Custom UAR
 ## Hardware
 
 - MAX3232 RS232 Serial Port to TTL Conversion Module
-- Wemos D1
+- Wemos D1 mini
 - Null modem cable
 
 ### Wiring
 
-| Wemos D1 | MAX3232 |
-| -------- | ------- |
-| D4       | TX      |
-| D3       | RX      |
-| GND      | GND     |
-| 3.3      | VCC     |
+| Wemos D1 mini | MAX3232 |
+| ------------- | ------- |
+| D5            | TX      |
+| D6            | RX      |
+| GND           | GND     |
+| 3.3           | VCC     |
 
 ## C356BEE RS232 command list
 
@@ -57,3 +57,5 @@ The case and cover can be printed using a filament printer in order to store the
 Make sure to connect the Rx and Tx pins properly between the nodes that need to communicate. I had a problem with my amplifier and
 MAX3232 where I used a straight cable instead of a twisted/null cable, which caused the devices to not communicate with each other.
 It took me a long time to realize this mistake.
+
+Don't use D7 / D8 pins on the D1 mini as D8 must be low during boot. The TX and RX pins also didn't work for me because they are hard-wired to the onboard USB-TTL converter, which keeps them high or interferes with external serial devices. 
