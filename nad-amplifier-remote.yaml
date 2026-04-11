@@ -9,9 +9,11 @@ wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
   power_save_mode: none
+  fast_connect: true
 
 logger:
-  level: INFO
+  level: ERROR
+  baud_rate: 0
 
 api:
   reboot_timeout: 0s
@@ -55,48 +57,48 @@ interval:
 
 
 text_sensor:
-
   - platform: uart_read_line_sensor
-    name: "Last UART Line"
-    id: nad_uart
-
     uart_id: uart_bus
+    name: "Last UART Line"
+    id: last_uart_line
 
     on_value:
       then:
         - lambda: |-
+            const char *line = x.c_str();
 
-            std::string line = x;
+            const char *eq = strchr(line, '=');
+            if (!eq) return;
 
-            line.erase(std::remove(line.begin(), line.end(), '\r'), line.end());
-            line.erase(std::remove(line.begin(), line.end(), '\n'), line.end());
+            int key_len = eq - line;
+            const char *value = eq + 1;
 
-            size_t eq = line.find("=");
-            if (eq == std::string::npos) return;
+            bool is_on = strcasecmp(value, "On") == 0;
 
-            std::string key = line.substr(0, eq);
-            std::string value = line.substr(eq + 1);
+            if (strncasecmp(line, "Main.Power", key_len) == 0) {
+              id(power).publish_state(is_on);
+              return;
+            }
 
-            std::transform(key.begin(), key.end(), key.begin(), ::tolower);
+            if (strncasecmp(line, "Main.Mute", key_len) == 0) {
+              id(mute).publish_state(is_on);
+              return;
+            }
 
-            ESP_LOGI("NAD", "key=%s value=%s", key.c_str(), value.c_str());
+            if (strncasecmp(line, "Main.SpeakerA", key_len) == 0) {
+              id(speaker_a).publish_state(is_on);
+              return;
+            }
 
-            bool state = (value == "On");
+            if (strncasecmp(line, "Main.SpeakerB", key_len) == 0) {
+              id(speaker_b).publish_state(is_on);
+              return;
+            }
 
-            if (key == "main.power")
-              id(power).publish_state(state);
-
-            else if (key == "main.mute")
-              id(mute).publish_state(state);
-
-            else if (key == "main.speakera")
-              id(speaker_a).publish_state(state);
-
-            else if (key == "main.speakerb")
-              id(speaker_b).publish_state(state);
-
-            else if (key == "main.source")
+            if (strncasecmp(line, "Main.Source", key_len) == 0) {
               id(source).publish_state(value);
+              return;
+            }
 
 
 switch:
