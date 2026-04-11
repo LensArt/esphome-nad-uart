@@ -23,8 +23,8 @@ ota:
 
 uart:
   id: uart_bus
-  tx_pin: D8
-  rx_pin: D7
+  tx_pin: D5 
+  rx_pin: D6
   baud_rate: 115200
 
   debug:
